@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mapa Inteligente</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
+  <!-- Font Awesome for Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    :root {
+      --primary-color: #14213d;
+      --accent-color: #fca311;
+      --bg-color: #ffffff;
+      --text-color: #14213d;
+      --light-text: #e5e5e5;
+      --panel-bg: rgba(255, 255, 255, 0.95);
+      --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    }
+
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      overflow: hidden;
+      /* Prevent body scroll */
+    }
+
+    /* Full Screen Map */
+    #map {
+      width: 100vw;
+      height: 100vh;
+      z-index: 1;
+    }
+
+    /* Floating Panel */
+    .floating-panel {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      width: 350px;
+      max-height: 90vh;
+      background: var(--panel-bg);
+      border-radius: 12px;
+      box-shadow: var(--shadow);
+      z-index: 1000;
+      /* Above map */
+      display: flex;
+      flex-direction: column;
+      backdrop-filter: blur(5px);
+      overflow: hidden;
+    }
+
+    /* Panel Header */
+    .panel-header {
+      background: var(--primary-color);
+      color: white;
+      padding: 15px;
+      text-align: center;
+    }
+
+    .panel-header h1 {
+      margin: 0;
+      font-size: 1.2rem;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+
+    /* Tabs Navigation */
+    .tabs {
+      display: flex;
+      background: #f1f5f9;
+      border-bottom: 1px solid #e2e8f0;
+    }
+
+    .tab-btn {
+      flex: 1;
+      background: none;
+      border: none;
+      padding: 12px;
+      cursor: pointer;
+      font-weight: 600;
+      color: #64748b;
+      transition: all 0.2s;
+      border-bottom: 3px solid transparent;
+    }
+
+    .tab-btn:hover {
+      background: #e2e8f0;
+      color: var(--primary-color);
+    }
+
+    .tab-btn.active {
+      color: var(--primary-color);
+      background: white;
+      border-bottom-color: var(--accent-color);
+    }
+
+    /* Tab Content */
+    .tab-content {
+      display: none;
+      padding: 20px;
+      overflow-y: auto;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
+    /* Form Elements */
+    .form-group {
+      margin-bottom: 15px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: 500;
+      font-size: 0.9rem;
+      color: #475569;
+    }
+
+    input[type="text"],
+    textarea {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      box-sizing: border-box;
+      /* Fix padding issues */
+      font-family: inherit;
+      font-size: 0.95rem;
+    }
+
+    input[type="text"]:focus,
+    textarea:focus {
+      outline: none;
+      border-color: var(--primary-color);
+      box-shadow: 0 0 0 2px rgba(20, 33, 61, 0.1);
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 80px;
+    }
+
+    /* Buttons */
+    .action-btn {
+      width: 100%;
+      padding: 10px;
+      background: var(--accent-color);
+      color: var(--primary-color);
+      border: none;
+      border-radius: 6px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: filter 0.2s;
+      font-size: 1rem;
+    }
+
+    .action-btn:hover {
+      filter: brightness(0.9);
+    }
+
+    .action-btn:disabled {
+      background: #cbd5e1;
+      cursor: not-allowed;
+    }
+
+    /* Assistant Response Area */
+    #assistant-history {
+      margin-top: 15px;
+      max-height: 300px;
+      overflow-y: auto;
+      border-top: 1px solid #e2e8f0;
+      padding-top: 10px;
+    }
+
+    .chat-message {
+      margin-bottom: 12px;
+      padding: 10px;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      line-height: 1.4;
+    }
+
+    .chat-message.user {
+      background: #f1f5f9;
+      color: #334155;
+      border-left: 4px solid #94a3b8;
+    }
+
+    .chat-message.assistant {
+      background: #eff6ff;
+      color: #1e3a8a;
+      border-left: 4px solid var(--accent-color);
+    }
+
+    .chat-message.warning {
+      background: #fffbeb;
+      border-left-color: #f59e0b;
+      color: #92400e;
+    }
+
+    .chat-message.error {
+      background: #fef2f2;
+      border-left-color: #ef4444;
+      color: #b91c1c;
+    }
+
+    /* Area Info Badge */
+    #area-info {
+      position: absolute;
+      bottom: 25px;
+      left: 20px;
+      background: var(--accent-color);
+      color: var(--primary-color);
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-weight: 700;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+      z-index: 1000;
+      transition: opacity 0.3s;
+    }
+
+    /* Responsive */
+    @media (max-width: 600px) {
+      .floating-panel {
+        width: 90%;
+        left: 5%;
+        max-height: 60vh;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- Floating Panel -->
+  <div class="floating-panel">
+    <div class="panel-header">
+      <h1><i class="fa-solid fa-map-location-dot"></i> Mapa Inteligente</h1>
+    </div>
+
+    <!-- Tabs Navigation -->
+    <div class="tabs">
+      <button class="tab-btn active" onclick="openTab('assistant-tab')"><i class="fa-solid fa-robot"></i>
+        Asistente</button>
+      <button class="tab-btn" onclick="openTab('search-tab')"><i class="fa-solid fa-magnifying-glass"></i>
+        Buscar</button>
+      <button class="tab-btn" onclick="openTab('route-tab')"><i class="fa-solid fa-route"></i> Rutas</button>
+    </div>
+
+    <!-- Assistant Tab -->
+    <div id="assistant-tab" class="tab-content active">
+      <form id="assistant-form">
+        <div class="form-group">
+          <label for="assistant-input">Pregunta a la IA:</label>
+          <textarea id="assistant-input" name="prompt"
+            placeholder="Ej. Encuentra cafeterías cerca del Museo del Prado y cómo ir andando desde Atocha."
+            required></textarea>
+        </div>
+        <button type="submit" class="action-btn"><i class="fa-solid fa-paper-plane"></i> Enviar Consulta</button>
+      </form>
+      <div id="assistant-history">
+        <!-- Chat history will appear here -->
+      </div>
+    </div>
+
+    <!-- Search Tab -->
+    <div id="search-tab" class="tab-content">
+      <form id="search-form">
+        <div class="form-group">
+          <label for="search-input">Lugar:</label>
+          <input id="search-input" type="text" name="query" placeholder="Ej. Torre Eiffel, París" required />
+        </div>
+        <button type="submit" class="action-btn">Buscar Lugar</button>
+      </form>
+      <div id="search-results" style="margin-top: 10px; font-size: 0.9rem; color: #64748b;"></div>
+    </div>
+
+    <!-- Route Tab -->
+    <div id="route-tab" class="tab-content">
+      <form id="route-form">
+        <div class="form-group">
+          <label for="route-start">Origen:</label>
+          <input id="route-start" type="text" name="start" placeholder="Punto de partida" required />
+        </div>
+        <div class="form-group">
+          <label for="route-end">Destino:</label>
+          <input id="route-end" type="text" name="end" placeholder="Punto de llegada" required />
+        </div>
+        <button type="submit" class="action-btn">Calcular Ruta</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Map Container -->
+  <div id="map"></div>
+
+  <!-- Area Info Badge -->
+  <div id="area-info" hidden>Área: 0 m²</div>
+
+  <!-- Scripts -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet-geometryutil@0.9.3/dist/leaflet.geometryutil.js"></script>
+  <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
+  <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
+  <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+
+  <script>
+    // --- Tab Switching Logic ---
+    function openTab(tabId) {
+      // Hide all contents
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+      // Deactivate all buttons
+      document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+
+      // Activate target
+      document.getElementById(tabId).classList.add('active');
+      // Find button that calls this function (trickier with inline click, using event would be better but this works for simple cases if we query selector based on text or index, but let's just loop)
+      // A simple way is to pass 'this' or match by siblings. Let's do a simple selector match:
+      const btnIndex = ['assistant-tab', 'search-tab', 'route-tab'].indexOf(tabId);
+      document.querySelectorAll('.tab-btn')[btnIndex].classList.add('active');
+    }
+
+    // --- Map Initialization ---
+    const map = L.map("map", {
+      zoomControl: false // We will add it in a specific position if needed, or default top-left (hidden by panel). Let's move it.
+    }).setView([40.4168, -3.7038], 13); // Madrid
+
+    L.control.zoom({
+      position: 'topright'
+    }).addTo(map);
+
+    const tiles = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors'
+    });
+    tiles.addTo(map);
+
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          map.setView([position.coords.latitude, position.coords.longitude], 14);
+        },
+        () => { },
+        { enableHighAccuracy: true, timeout: 5000 }
+      );
+    }
+
+    // --- Layers ---
+    const searchLayer = L.layerGroup().addTo(map);
+    const areaLayer = L.geoJSON(null, {
+      style: { color: "#fca311", weight: 3, fillColor: "#fca311", fillOpacity: 0.2 }
+    }).addTo(map);
+    const aiRouteLayer = L.geoJSON(null, {
+      style: { color: "#14213d", weight: 5, opacity: 0.7 }
+    }).addTo(map);
+    const drawnItems = new L.FeatureGroup();
+    map.addLayer(drawnItems);
+
+    let routingControl = null;
+
+    // --- Draw Control ---
+    // Move draw control to topright or somewhere not covered
+    const drawControl = new L.Control.Draw({
+      position: 'topright',
+      edit: { featureGroup: drawnItems },
+      draw: { polygon: true, rectangle: true, circle: false, circlemarker: false, marker: false, polyline: false }
+    });
+    map.addControl(drawControl);
+
+    // --- UI References ---
+    const areaInfo = document.getElementById("area-info");
+    const searchForm = document.getElementById("search-form");
+    const searchResults = document.getElementById("search-results");
+    const routeForm = document.getElementById("route-form");
+    const assistantForm = document.getElementById("assistant-form");
+    const assistantHistoryDiv = document.getElementById("assistant-history");
+    const assistantHistory = []; // Store conversation state
+
+    // --- Constants ---
+    const NOMINATIM_ENDPOINT = "https://nominatim.openstreetmap.org/search";
+
+    // --- Helper Functions ---
+    function toNumber(value) {
+      const parsed = Number.parseFloat(value);
+      return Number.isFinite(parsed) ? parsed : null;
+    }
+
+    function parseGeoJson(geojson) {
+      if (!geojson) return null;
+      if (typeof geojson === "string") {
+        try { return JSON.parse(geojson); } catch { return null; }
+      }
+      return geojson;
+    }
+
+    // Area Calculation Logic (Simplified from original)
+    function calculateGroupArea(group) {
+      let total = 0;
+      group.eachLayer(layer => {
+        if (layer instanceof L.Polygon) {
+          total += L.GeometryUtil.geodesicArea(layer.getLatLngs()[0]);
+        }
+      });
+      return total;
+    }
+
+    function refreshAreaInfo() {
+      // We really just want to show active area
+      // Combine layers logic if needed, or iterate
+      // For brevity, let's just check drawnItems for now + imported polygons
+      const drawnArea = calculateGroupArea(drawnItems);
+      const importedArea = calculateGroupArea(areaLayer);
+      const total = drawnArea + importedArea;
+
+      if (total > 0) {
+        areaInfo.textContent = formatArea(total);
+        areaInfo.hidden = false;
+      } else {
+        areaInfo.hidden = true;
+      }
+    }
+
+    function formatArea(m2) {
+      if (m2 < 10000) return `Área: ${m2.toFixed(0)} m²`;
+      return `Área: ${(m2 / 10000).toFixed(2)} ha`;
+    }
+
+    map.on(L.Draw.Event.CREATED, (e) => { drawnItems.addLayer(e.layer); refreshAreaInfo(); });
+    map.on(L.Draw.Event.EDITED, refreshAreaInfo);
+    map.on(L.Draw.Event.DELETED, refreshAreaInfo);
+
+
+    // --- Geocoding & Display Logic ---
+    async function geocode(query, { includePolygon = false } = {}) {
+      const params = new URLSearchParams({
+        q: query, format: "json", addressdetails: "1", limit: "1"
+      });
+      if (includePolygon) params.set("polygon_geojson", "1");
+
+      const res = await fetch(`${NOMINATIM_ENDPOINT}?${params}`);
+      if (!res.ok) throw new Error("Error de conexión");
+      const data = await res.json();
+      if (!data.length) throw new Error("No encontrado");
+
+      const result = data[0];
+      return {
+        lat: parseFloat(result.lat),
+        lon: parseFloat(result.lon),
+        displayName: result.display_name,
+        geojson: result.geojson
+      };
+    }
+
+    function displayPlace(place, { clearExisting = true } = {}) {
+      if (!place) return;
+      if (clearExisting) {
+        searchLayer.clearLayers();
+        areaLayer.clearLayers();
+        aiRouteLayer.clearLayers();
+        if (routingControl) { routingControl.remove(); routingControl = null; }
+      }
+
+      const marker = L.marker([place.lat, place.lon]).addTo(searchLayer);
+      marker.bindPopup(`<b>${place.displayName}</b>`).openPopup();
+      map.setView([place.lat, place.lon], 15);
+
+      if (place.geojson) {
+        areaLayer.addData(place.geojson);
+        try {
+          map.fitBounds(areaLayer.getBounds(), { padding: [50, 50] });
+        } catch (e) { }
+      }
+      refreshAreaInfo();
+    }
+
+    function displayRoute(route) {
+      if (!route) return;
+      aiRouteLayer.clearLayers();
+      if (routingControl) { routingControl.remove(); routingControl = null; }
+
+      if (route.geometry) {
+        aiRouteLayer.addData(route.geometry);
+        map.fitBounds(aiRouteLayer.getBounds(), { padding: [50, 50] });
+      }
+
+      // Add markers
+      if (route.origin) L.marker([route.origin.lat, route.origin.lon]).addTo(searchLayer).bindPopup("Origen");
+      if (route.destination) L.marker([route.destination.lat, route.destination.lon]).addTo(searchLayer).bindPopup("Destino");
+    }
+
+    // --- Event Listeners ---
+
+    // Search Tab
+    searchForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const q = document.getElementById("search-input").value;
+      searchResults.textContent = "Buscando...";
+      try {
+        const place = await geocode(q, { includePolygon: true });
+        displayPlace(place, { clearExisting: true });
+        searchResults.textContent = "";
+      } catch (err) {
+        searchResults.textContent = err.message;
+      }
+    });
+
+    // Route Tab
+    routeForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const start = document.getElementById("route-start").value;
+      const end = document.getElementById("route-end").value;
+      const btn = routeForm.querySelector("button");
+
+      btn.disabled = true;
+      btn.textContent = "Calculando...";
+
+      try {
+        const [p1, p2] = await Promise.all([geocode(start), geocode(end)]);
+
+        if (routingControl) map.removeControl(routingControl);
+
+        routingControl = L.Routing.control({
+          waypoints: [L.latLng(p1.lat, p1.lon), L.latLng(p2.lat, p2.lon)],
+          routeWhileDragging: false,
+          // Use generic OSRM public server
+          serviceUrl: 'https://router.project-osrm.org/route/v1',
+          show: false // Don't show the routing instructions container covering the map
+        }).addTo(map);
+
+        routingControl.on('routesfound', function (e) {
+          // Can show info in a popup or panel if needed
+        });
+
+      } catch (err) {
+        alert("Error: " + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Calcular Ruta";
+      }
+    });
+
+
+    // --- Assistant Logic ---
+    function appendToHistory(role, text, type = "info") {
+      const div = document.createElement("div");
+      div.className = `chat-message ${role} ${type}`;
+      div.textContent = text;
+      assistantHistoryDiv.appendChild(div);
+      assistantHistoryDiv.scrollTop = assistantHistoryDiv.scrollHeight;
+    }
+
+    assistantForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const input = document.getElementById("assistant-input");
+      const prompt = input.value.trim();
+      if (!prompt) return;
+
+      const btn = assistantForm.querySelector("button");
+      btn.disabled = true;
+      appendToHistory("user", prompt);
+      input.value = "";
+
+      // Prepare payload
+      const historyPayload = assistantHistory.slice(-10);
+
+      try {
+        const res = await fetch("/api/assistant", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt, history: historyPayload })
+        });
+
+        const data = await res.json();
+        console.log("Backend response:", data);
+
+        if (!res.ok) throw new Error(data.error || "Error del servidor");
+
+        // Save to local history state
+        assistantHistory.push({ role: "user", content: prompt });
+        assistantHistory.push({ role: "assistant", content: data.reply });
+
+        appendToHistory("assistant", data.reply);
+
+        if (data.warnings && data.warnings.length > 0) {
+          data.warnings.forEach(warning => {
+            console.warn("Backend warning:", warning);
+            appendToHistory("assistant", `⚠️ No pude completar una acción: ${warning}`, "warning");
+          });
+        }
+
+        // Execute actions
+        if (data.actions && data.actions.length > 0) {
+          console.log("Processing actions:", data.actions);
+          let first = true;
+          data.actions.forEach(action => {
+            console.log("Action:", action);
+            if (action.type === 'place') {
+              console.log("Displaying place:", action.payload);
+              displayPlace(action.payload, { clearExisting: first });
+              first = false;
+            } else if (action.type === 'route') {
+              console.log("Displaying route:", action.payload);
+              displayRoute(action.payload);
+            } else {
+              console.warn("Unknown action type:", action.type);
+            }
+          });
+        } else if (!data.warnings || data.warnings.length === 0) {
+          // Only warn if no actions AND no warnings (meaning silent success or confusing state)
+          console.warn("No actions in response");
+        }
+
+      } catch (err) {
+        console.error("Assistant error:", err);
+        appendToHistory("assistant", err.message, "error");
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+  </script>
+</body>
+
+</html>
