@@ -31,38 +31,43 @@ NOMINATIM_USER_AGENT = os.getenv(
 )
 
 SYSTEM_PROMPT = (
-    "Eres un asistente experto geo-espacial para una aplicación de mapas interactivos. "
-    "Tu objetivo es interpretar lenguaje natural y traducirlo a acciones concretas en el mapa.\n"
-    "TIENES 3 HERRAMIENTAS DISPONIBLES (Tú decides su uso, no las ejecutas):\n"
-    "1. `place(query: str, include_polygon: bool)`: Busca un lugar. Usa `include_polygon=true` si el usuario menciona áreas, límites, perímetros, o distritos.\n"
-    "2. `route(origin: str, destination: str, profile: str)`: Trazar ruta. Perfiles: 'driving' (coche/auto), 'cycling' (bici), 'walking' (pie/andar).\n"
-    "3. `area(query: str)`: Muestra el polígono de un lugar (igual a place con polygon=true).\n\n"
-    "REGLAS E INSTRUCCIONES:\n"
-    "- Si el usuario saluda o charla, responde amablemente en 'reply' y devuelve 'actions': [].\n"
-    "- Si la petición es AMBIGUA (ej: 'llévame a San José' -> ¿Costa Rica, California, Almería?), NO adivines. "
-    "Pregunta en 'reply' para aclarar y devuelve 'actions': [].\n"
-    "- Si faltan datos (ej: 'ruta a Madrid' sin origen), pregunta por el dato faltante.\n"
-    "- Para buscar lugares, LIMPIA la consulta. Elimina artículos ('el', 'la', 'un') y preposiciones ('en', 'a', 'de') innecesarias.\n"
-    "  EJEMPLO: 'el museo del prado en madrid' -> 'Museo del Prado, Madrid' (NO 'el museo... en ...').\n"
-    "- SI EL USUARIO PIDE UNA CALLE, AVENIDA, RÍO, O RUTA DE ALGO ('traza la calle...', 'recorrido de...'):\n"
-    "  USA SIEMPRE `include_polygon: true` en la acción `place`. Esto mostrará la línea o polígono completo.\n"
-    "- Responde SIEMPRE en formato JSON estricto con esta estructura:\n"
-    "  {\n"
-    "    \"reply\": \"Texto breve para el usuario explicando qué hiciste o pidiendo aclaración.\",\n"
-    "    \"actions\": [{ \"type\": \"place|route|area\", \"params\": { ... } }]\n"
-    "  }\n\n"
-    "EJEMPLOS (FEW-SHOT):\n"
-    "User: 'Hola, ¿qué sabes hacer?'\n"
-    "Model: { \"reply\": \"Hola. Puedo buscar lugares, mostrar áreas y calcular rutas entre puntos. ¿En qué te ayudo?\", \"actions\": [] }\n\n"
-    "User: 'Enséñame dónde está el Retiro y luego la Puerta de Alcalá'\n"
-    "Model: { \"reply\": \"Aquí tienes el Parque del Retiro y la Puerta de Alcalá en Madrid.\", \"actions\": [{ \"type\": \"place\", \"params\": { \"query\": \"Parque del Retiro, Madrid\" } }, { \"type\": \"place\", \"params\": { \"query\": \"Puerta de Alcalá, Madrid\" } }] }\n\n"
-    "User: 'Localiza el Pont des Arts en París'\n"
-    "Model: { \"reply\": \"Localizando el Pont des Arts.\", \"actions\": [{ \"type\": \"place\", \"params\": { \"query\": \"Pont des Arts, París\" } }] }\n\n"
-    "User: 'Traza la ruta de la Rue de Buci'\n"
-    "Model: { \"reply\": \"Mostrando el trazado de la Rue de Buci.\", \"actions\": [{ \"type\": \"place\", \"params\": { \"query\": \"Rue de Buci, París\", \"include_polygon\": true } }] }\n"
-    "User: 'Marca el perímetro de Francia'\n"
-    "Model: { \"reply\": \"Mostrando los límites de Francia.\", \"actions\": [{ \"type\": \"place\", \"params\": { \"query\": \"Francia\", \"include_polygon\": true } }] }\n"
+    "Eres 'Antigravity Map Assistant', un experto en geolocalización y análisis espacial para una aplicación de mapas interactivos.\n"
+    "Tu objetivo es interpretar el lenguaje natural del usuario y traducirlo a acciones estructurales precisas (JSON).\n\n"
+    "### HERRAMIENTAS DISPONIBLES (Tú decides su uso):\n"
+    "1. `place(query: str, include_polygon: bool)`: Busca un lugar específico único.\n"
+    "   - Usa `include_polygon: true` si el usuario pide ver el trazado de una CALLE, RÍO, o el contorno de un lugar.\n"
+    "2. `search(query: str, limit: int)`: Busca MÚLTIPLES ubicaciones de una cadena, tipo de negocio o categoría (ej. 'Zaras en Madrid', 'museos en París').\n"
+    "   - 'limit' por defecto 10, máximo 20.\n"
+    "3. `route(origin: str, destination: str, profile: str)`: Trazar una ruta entre dos puntos.\n"
+    "   - Perfiles: 'driving' (coche), 'cycling' (bici), 'walking' (pie).\n"
+    "4. `area(query: str)`: Muestra el contorno/perímetro cerrado de una zona administrativa (distrito, barrio, ciudad, parque).\n\n"
+    "### REGLAS CRÍTICAS DE GEOLOCALIZACIÓN (PARA EL ÉXITO):\n"
+    "- **Optimización de Búsqueda**: El buscador (Nominatim) prefiere el formato 'Lugar, Ciudad, País'.\n"
+    "- **Limpieza de Ruido**: NUNCA incluyas 'el', 'la', 'en', 'hacia', 'desde' en el valor de 'query' si son conectores de lenguaje natural.\n"
+    "- **Especifidad**: Si el usuario dice 'Calle Mayor', añade la ciudad más probable por el contexto (ej. 'Calle Mayor, Madrid').\n"
+    "- **París Especial**: Para distritos de París, usa la nomenclatura oficial 'Paris [N]e Arrondissement' (ej. 'Paris 5e Arrondissement').\n"
+    "- **Ambigüedad**: Si la petición es muy vaga (ej: 'ruta a Madrid' sin origen), pregunta amablemente en 'reply' y no devuelvas acciones.\n"
+    "- **Respuesta**: Responde SIEMPRE en formato JSON estricto.\n\n"
+    "### EJEMPLOS (FEW-SHOT):\n"
+    "User: 'Hola, ¿qué puedes hacer?'\n"
+    "Model: { \"reply\": \"¡Hola! Puedo localizar puntos, mostrar el contorno de distritos o zonas, y calcular rutas para ir en coche, bici o andando. ¿Qué tienes en mente?\", \"actions\": [] }\n\n"
+    "User: 'Marca todas las tiendas Zara en París'\n"
+    "Model: {\n"
+    "  \"reply\": \"Buscando todas las tiendas Zara en París para ti.\",\n"
+    "  \"actions\": [{ \"type\": \"search\", \"params\": { \"query\": \"Zara, Paris\", \"limit\": 15 } }]\n"
+    "}\n\n"
+    "User: 'Traza la Rue de Buci'\n"
+    "Model: {\n"
+    "  \"reply\": \"Mostrando el trazado de la Rue de Buci en París.\",\n"
+    "  \"actions\": [{ \"type\": \"place\", \"params\": { \"query\": \"Rue de Buci, Paris\", \"include_polygon\": true } }]\n"
+    "}\n\n"
+    "User: 'Calcula ruta de Madrid a Barcelona'\n"
+    "Model: {\n"
+    "  \"reply\": \"Calculando la ruta en coche de Madrid a Barcelona.\",\n"
+    "  \"actions\": [{ \"type\": \"route\", \"params\": { \"origin\": \"Madrid, España\", \"destination\": \"Barcelona, España\", \"profile\": \"driving\" } }]\n"
+    "}\n"
 )
+
 
 PROFILE_ALIASES: Dict[str, str] = {
     "car": "driving",
@@ -94,15 +99,22 @@ def normalise_profile(raw_profile: str | None) -> str:
     return PROFILE_ALIASES.get(key, "driving")
 
 
-def geocode_place(query: str, include_polygon: bool = False) -> Dict[str, Any]:
+def geocode_place(query: str, include_polygon: bool = False, viewbox: str | None = None) -> Dict[str, Any]:
+    # Si pedimos polígono, pedimos varios resultados para poder elegir el que tenga geometría real
+    limit = 5 if include_polygon else 1
     params = {
         "q": query,
         "format": "json",
         "addressdetails": 1,
-        "limit": 1,
+        "limit": limit,
     }
     if include_polygon:
         params["polygon_geojson"] = 1
+    
+    if viewbox:
+        params["viewbox"] = viewbox
+        # No forzamos bounded=1 para permitir encontrar fuera si no hay nada en el viewbox,
+        # pero viewbox da prioridad a lo que esté dentro.
 
     response = requests.get(
         NOMINATIM_ENDPOINT,
@@ -115,7 +127,18 @@ def geocode_place(query: str, include_polygon: bool = False) -> Dict[str, Any]:
     if not data:
         raise ValueError(f"No se encontraron resultados para '{query}'.")
 
-    result = data[0]
+    # Si buscamos un área o trazado, priorizamos el resultado que tenga geometría (Polygon/LineString)
+    if include_polygon:
+        best_match = None
+        for res in data:
+            geojson = res.get("geojson", {})
+            if geojson.get("type") in ["Polygon", "MultiPolygon", "LineString"]:
+                best_match = res
+                break
+        result = best_match or data[0]
+    else:
+        result = data[0]
+
     return {
         "query": query,
         "displayName": result.get("display_name"),
@@ -124,6 +147,38 @@ def geocode_place(query: str, include_polygon: bool = False) -> Dict[str, Any]:
         "geojson": result.get("geojson"),
         "bounding_box": result.get("boundingbox"),
     }
+def geocode_multiple(query: str, limit: int = 10, viewbox: str | None = None) -> List[Dict[str, Any]]:
+    params = {
+        "q": query,
+        "format": "json",
+        "addressdetails": 1,
+        "limit": min(limit, 50),
+    }
+    if viewbox:
+        params["viewbox"] = viewbox
+
+    response = requests.get(
+        NOMINATIM_ENDPOINT,
+        params=params,
+        timeout=15,
+        headers={"User-Agent": NOMINATIM_USER_AGENT},
+    )
+    response.raise_for_status()
+    data = response.json()
+    if not data:
+        raise ValueError(f"No se encontraron resultados para '{query}'.")
+
+    results = []
+    for res in data:
+        results.append({
+            "query": query,
+            "displayName": res.get("display_name"),
+            "lat": float(res["lat"]),
+            "lon": float(res["lon"]),
+            "geojson": res.get("geojson"),
+            "bounding_box": res.get("boundingbox"),
+        })
+    return results
 
 
 def geocode_pair(origin: str, destination: str) -> Tuple[Dict[str, Any], Dict[str, Any]]:
@@ -315,64 +370,72 @@ import re
 
 def clean_search_query(query: str) -> str:
     """
-    Remove problematic stopwords (articles, prepositions) that confuse Nominatim.
-    Example: 'el pont des arts en parís' -> 'pont des arts parís'
+    Mejora la consulta para Nominatim eliminando ruidos y normalizando.
+    Intentamos mantener 'de' si parece parte de un nombre (Rue de la Paix).
     """
     if not query:
         return ""
     
-    # 1. Normalize spaces
+    # Normalizar espacios
     clean = re.sub(r'\s+', ' ', query.strip())
     
-    # 2. Build regex for common stopwords surrounded by boundaries
-    # Stopwords: el, la, lo, los, las, un, una, unos, unas (articles)
-    #            a, ante, bajl, cabe, con, contra, de, desde, en, entre... (prepositions)
-    # We focus on the high-impact ones for geocoding: el, la, en, a, de, del
-    # Note: 'de' is tricky (Place de la Concorde), so maybe be careful.
-    # Nominatim often handles 'de' okay in French names, but 'en' (in) is a killer.
+    # Eliminar ruidos al inicio que suelen ser conectores de lenguaje natural o comandos
+    # Ex: "Localiza el Museo del Prado" -> "Museo del Prado"
+    noise_start = r'^(el|la|los|las|un|una|en|desde|hacia|mira|busca|localiza|enseñame|marca)\s+'
+    clean = re.sub(noise_start, '', clean, flags=re.IGNORECASE)
     
-    # Let's target specifically ' en ', ' el ', ' la ' which users use as connectors
-    # Case insensitive
-    # REMOVED 'de', 'del' because they break names like "Rue de Buci" or "Place de la Concorde"
-    stopwords = ["en", "el", "la", "los", "las", "un", "una", "desde", "hasta", "hacia", "para"]
-    # Create pattern: \b(word1|word2|...)\b
-    pattern = r'\b(' + '|'.join(stopwords) + r')\b'
+    # "Museo del Prado en Madrid" -> "Museo del Prado Madrid"
+    clean = re.sub(r'\s+en\s+', ' ', clean, flags=re.IGNORECASE)
     
-    clean = re.sub(pattern, ' ', clean, flags=re.IGNORECASE)
-    
-    # 3. Clean up double spaces resulted from removal
-    clean = re.sub(r'\s+', ' ', clean).strip()
-    
-    return clean
+    return clean.strip()
 
-def execute_action(action: Dict[str, Any]) -> Dict[str, Any]:
+def execute_action(action: Dict[str, Any], context: Dict[str, Any] | None = None) -> Dict[str, Any]:
     action_type = action.get("type")
     params = action.get("params") or {}
+    viewbox = context.get("viewbox") if context else None
 
     if action_type == "place":
         query = params.get("query")
         if not query:
             raise ValueError("La acción 'place' necesita el parámetro 'query'.")
         
-        # Try raw query first? Or cleaned?
-        # Safe bet: Try cleaned if raw is complex, but actually Nominatim prefers clean.
-        # But wait, 'Calle de la Paz' -> 'Calle Paz' might be wrong.
-        # However, 'Pont des Arts en Paris' -> 'Pont des Arts Paris' is correct.
-        # Let's log what we do.
         cleaned = clean_search_query(query)
-        print(f"DEBUG: Geocoding '{query}' -> cleaned: '{cleaned}'")
+        print(f"DEBUG: Geocoding (place) '{query}' -> cleaned: '{cleaned}' (viewbox={viewbox})")
         
         try:
-            place = geocode_place(cleaned, include_polygon=bool(params.get("include_polygon")))
+            place = geocode_place(cleaned, include_polygon=bool(params.get("include_polygon")), viewbox=viewbox)
         except ValueError:
-            # Fallback to raw query if cleaned fails (unlikely but safe)
+            # Fallback a raw query if cleaned fails
             if cleaned != query:
                 print(f"DEBUG: Cleaned failed, retrying raw: '{query}'")
-                place = geocode_place(query, include_polygon=bool(params.get("include_polygon")))
+                try:
+                    place = geocode_place(query, include_polygon=bool(params.get("include_polygon")), viewbox=viewbox)
+                except ValueError as e:
+                    raise ValueError(f"No pude localizar '{query}'. Prueba añadiendo la ciudad.") from e
             else:
                 raise
 
         return {"type": "place", "payload": place}
+
+    if action_type == "search":
+        query = params.get("query")
+        limit = params.get("limit") or 10
+        if not query:
+            raise ValueError("La acción 'search' necesita el parámetro 'query'.")
+        
+        cleaned = clean_search_query(query)
+        print(f"DEBUG: Geocoding (search) '{query}' -> cleaned: '{cleaned}' (limit={limit}, viewbox={viewbox})")
+        
+        try:
+            places = geocode_multiple(cleaned, limit=int(limit), viewbox=viewbox)
+        except ValueError:
+            if cleaned != query:
+                print(f"DEBUG: Cleaned search failed, retrying raw: '{query}'")
+                places = geocode_multiple(query, limit=int(limit), viewbox=viewbox)
+            else:
+                raise
+
+        return {"type": "search", "payload": places}
 
     if action_type == "area":
         query = params.get("query")
@@ -380,13 +443,18 @@ def execute_action(action: Dict[str, Any]) -> Dict[str, Any]:
             raise ValueError("La acción 'area' necesita el parámetro 'query'.")
             
         cleaned = clean_search_query(query)
+        print(f"DEBUG: Geocoding (area) '{query}' -> cleaned: '{cleaned}' (viewbox={viewbox})")
         try:
-             place = geocode_place(cleaned, include_polygon=True)
+             place = geocode_place(cleaned, include_polygon=True, viewbox=viewbox)
+             # Validar si devolvió un polígono útil
+             if place.get("geojson", {}).get("type") == "Point":
+                 print(f"DEBUG: '{cleaned}' devolvió un punto en vez de área.")
         except ValueError:
              if cleaned != query:
-                 place = geocode_place(query, include_polygon=True)
+                  print(f"DEBUG: Cleaned area failed, retrying raw: '{query}'")
+                  place = geocode_place(query, include_polygon=True, viewbox=viewbox)
              else:
-                 raise
+                  raise
 
         return {"type": "place", "payload": place}
 
@@ -396,13 +464,13 @@ def execute_action(action: Dict[str, Any]) -> Dict[str, Any]:
         if not origin or not destination:
             raise ValueError("La acción 'route' necesita 'origin' y 'destination'.")
         
-        # Restore missing variable
         profile = params.get("profile")
 
         cleaned_origin = clean_search_query(origin)
         cleaned_dest = clean_search_query(destination)
         
         try:
+            # Para rutas, no usamos viewbox por defecto porque el origen/destino pueden estar lejos
             route = route_between(cleaned_origin, cleaned_dest, profile=profile or "driving")
         except ValueError:
              # Retry raw
@@ -417,13 +485,13 @@ def execute_action(action: Dict[str, Any]) -> Dict[str, Any]:
     raise ValueError(f"Acción desconocida: {action_type}")
 
 
-def execute_plan(actions: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], List[str]]:
+def execute_plan(actions: List[Dict[str, Any]], context: Dict[str, Any] | None = None) -> Tuple[List[Dict[str, Any]], List[str]]:
     executed: List[Dict[str, Any]] = []
     warnings: List[str] = []
 
     for action in actions:
         try:
-            executed.append(execute_action(action))
+            executed.append(execute_action(action, context=context))
         except Exception as exc:  # noqa: BLE001 - capturamos para devolver al cliente
             warnings.append(str(exc))
 
@@ -445,12 +513,11 @@ def create_app() -> Flask:
             return jsonify({"error": "La consulta no puede estar vacía."}), 400
 
         history = payload.get("history")
-        if history is not None and not isinstance(history, list):
-            return jsonify({"error": "El historial debe ser una lista de mensajes."}), 400
+        context = payload.get("context") # Map context (viewbox, center)
 
         try:
             plan = request_plan_from_gemini(prompt, history=history)
-            executed_actions, warnings = execute_plan(plan.get("actions", []))
+            executed_actions, warnings = execute_plan(plan.get("actions", []), context=context)
         except AssistantPlanningError as exc:
             return jsonify({"error": str(exc)}), 502
         except RuntimeError as exc:

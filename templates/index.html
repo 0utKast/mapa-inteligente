@@ -330,7 +330,7 @@
     // --- Map Initialization ---
     const map = L.map("map", {
       zoomControl: false // We will add it in a specific position if needed, or default top-left (hidden by panel). Let's move it.
-    }).setView([40.4168, -3.7038], 13); // Madrid
+    }).setView([48.8566, 2.3522], 12); // París (Default)
 
     L.control.zoom({
       position: 'topright'
@@ -458,7 +458,7 @@
       };
     }
 
-    function displayPlace(place, { clearExisting = true } = {}) {
+    function displayPlace(place, { clearExisting = true, zoom = true, openPopup = true } = {}) {
       if (!place) return;
       if (clearExisting) {
         searchLayer.clearLayers();
@@ -468,14 +468,20 @@
       }
 
       const marker = L.marker([place.lat, place.lon]).addTo(searchLayer);
-      marker.bindPopup(`<b>${place.displayName}</b>`).openPopup();
-      map.setView([place.lat, place.lon], 15);
+      marker.bindPopup(`<b>${place.displayName}</b>`);
+      if (openPopup) marker.openPopup();
+
+      if (zoom) {
+        map.setView([place.lat, place.lon], 15);
+      }
 
       if (place.geojson) {
         areaLayer.addData(place.geojson);
-        try {
-          map.fitBounds(areaLayer.getBounds(), { padding: [50, 50] });
-        } catch (e) { }
+        if (zoom) {
+          try {
+            map.fitBounds(areaLayer.getBounds(), { padding: [50, 50] });
+          } catch (e) { }
+        }
       }
       refreshAreaInfo();
     }
@@ -567,14 +573,26 @@
       appendToHistory("user", prompt);
       input.value = "";
 
-      // Prepare payload
+      // Prepare payload with map context for better geocoding
       const historyPayload = assistantHistory.slice(-10);
+      const bounds = map.getBounds();
+      const viewbox = [
+        bounds.getWest(), bounds.getNorth(),
+        bounds.getEast(), bounds.getSouth()
+      ].join(',');
 
       try {
         const res = await fetch("/api/assistant", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ prompt, history: historyPayload })
+          body: JSON.stringify({
+            prompt,
+            history: historyPayload,
+            context: {
+              viewbox: viewbox,
+              center: map.getCenter()
+            }
+          })
         });
 
         const data = await res.json();
@@ -604,6 +622,23 @@
             if (action.type === 'place') {
               console.log("Displaying place:", action.payload);
               displayPlace(action.payload, { clearExisting: first });
+              first = false;
+            } else if (action.type === 'search') {
+              console.log("Displaying search results:", action.payload);
+              if (first) {
+                searchLayer.clearLayers();
+                areaLayer.clearLayers();
+                aiRouteLayer.clearLayers();
+                if (routingControl) { routingControl.remove(); routingControl = null; }
+              }
+              const places = Array.isArray(action.payload) ? action.payload : [action.payload];
+              places.forEach(p => displayPlace(p, { clearExisting: false, zoom: false, openPopup: false }));
+
+              // Fit all markers
+              if (places.length > 0) {
+                const group = L.featureGroup(searchLayer.getLayers());
+                map.fitBounds(group.getBounds().pad(0.1));
+              }
               first = false;
             } else if (action.type === 'route') {
               console.log("Displaying route:", action.payload);

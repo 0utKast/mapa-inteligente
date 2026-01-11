@@ -1,4 +1,4 @@
-# Mapa Inteligente
+# Mapa Inteligente (v0.2-alpha)
 
 Aplicación web sencilla para localizar lugares, trazar rutas y delimitar áreas sobre mapas de OpenStreetMap.
 
@@ -37,9 +37,10 @@ En Windows puedes usar `run_app.bat`, que se encarga de crear el entorno virtual
 ## Funcionalidades
 
 - **Localizar lugares:** introducción de texto libre con geocodificación vía Nominatim.
+- **Búsqueda múltiple:** capacidad para localizar y marcar simultáneamente múltiples puntos de una misma cadena o categoría (ej. "Zaras en París") mediante la nueva acción `search`.
 - **Trazar rutas:** cálculo de rutas en coche apoyado en OSRM; se puede plegar/expandir el panel detallado.
 - **Delimitar áreas:** herramientas de dibujo (polígonos y rectángulos) con cálculo de superficie estimada o importación automática del contorno de lugares con soporte en Nominatim cuando el servicio dispone del polígono.
-- **Asistente IA:** consultas en lenguaje natural a Gemini que disparan automáticamente búsquedas, rutas o delimitaciones y reubican el mapa según la intención del usuario.
+- **Asistente IA:** consultas en lenguaje natural a Gemini que disparan automáticamente búsquedas (simples o múltiples), rutas o delimitaciones y reubican el mapa según la intención del usuario.
 
 ## Uso del asistente IA
 
